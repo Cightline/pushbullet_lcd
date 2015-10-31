@@ -6,7 +6,7 @@ import Adafruit_CharLCD as LCD
 
 class Pushbullet_LCD():
     def __init__(self):
-        self.api_key = ''
+        self.api_key = 'YOUR_KEY'
         self.api     = pb.PushBullet(self.api_key)
 
         self.lcd_columns = 16
@@ -21,7 +21,7 @@ class Pushbullet_LCD():
         self.msg_buffer = [ ' '* self.lcd_columns  ] * self.lcd_rows
         self.scroll_speed = .5
 
-        self.all_pushes = None
+        self.messages = []
 
 
    
@@ -34,6 +34,7 @@ class Pushbullet_LCD():
         if len(message) <= 16:
             self.msg_buffer[0] = message
             self.lcd.message(self.msg_buffer[0])
+            time.sleep(10)
 
 
         else:
@@ -49,27 +50,48 @@ class Pushbullet_LCD():
        
 
     def update_pushes(self):
-        self.all_pushes = self.api.pushes()
+        self.set_message('updating...')
+
+        self.messages = []
+
+        # Cache the messages
+        for push in self.api.pushes():
+            self.messages.append(push.body)
+
+
         
+    def set_message(self, message):
+        self.lcd.clear()
+        self.lcd.message(message)
 
-
-
-with daemon.DaemonContext():
+if __name__ == "__main__":
+    update_seconds = 120
     pb_lcd = Pushbullet_LCD()
     pb_lcd.update_pushes()
 
     start_time = time.time()
     
     while True:
-        for message in pb_lcd.all_pushes:
-            pb_lcd.scroll_message(message.body)
+        count = 0
+
+
+        if len(pb_lcd.messages) == 0:
+            pb_lcd.set_message('No pushes')
+            time.sleep(update_seconds)
+
+        for message in pb_lcd.messages:
+            if message == '':
+                continue
+
+            pb_lcd.scroll_message(message)
             time.sleep(5)
+            count += 1
+
 
         now = time.time()
-
-        if now - start_time <= 120:
+        if now - start_time >= update_seconds:
             pb_lcd.update_pushes()
             start_time = now
 
-    
+        print('end loop') 
 
