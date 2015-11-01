@@ -1,13 +1,16 @@
-import daemon
+import ConfigParser
+import os
 import time
+import datetime
+
+import daemon
 import pushybullet as pb
 import Adafruit_CharLCD as LCD
 
 
+
 class Pushbullet_LCD():
     def __init__(self):
-        self.api_key = 'YOUR_KEY'
-        self.api     = pb.PushBullet(self.api_key)
 
         self.lcd_columns = 16
         self.lcd_rows    = 2
@@ -18,45 +21,71 @@ class Pushbullet_LCD():
         
 
         self.lcd.set_color(0.2, 0.5, 1.0) 
-        self.msg_buffer = [ ' '* self.lcd_columns  ] * self.lcd_rows
+        self.lcd_buffer = [ ' '* self.lcd_columns  ] * self.lcd_rows
+
+
         self.scroll_speed = .5
 
-        self.messages = []
+        self.pushes = []
 
+
+        self.config = ConfigParser.ConfigParser()
+        self.config_paths = ['%s/config' % (os.getcwd())]
+
+        for path in self.config_paths:
+            if os.path.exists(path):
+                self.config.read(path)
+
+        self.update_interval = float(self.config.get('settings', 'update_interval'))
+        self.pause_interval  = float(self.config.get('settings', 'pause_interval'))
+        self.update_time     = None
+        self.api_key         = self.config.get('settings', 'api_key')
+        self.api             = pb.PushBullet(self.api_key)
+
+
+    def write_message_buffer(self):
+        self.lcd.clear()
+        self.lcd.message('\n'.join(self.lcd_buffer))
 
    
-    def scroll_message(self, message):
+    def scroll_buffer(self, message, row):
         front = 0
-        end   = 16
+        end   = self.lcd_columns
 
-        self.lcd.clear()
 
-        if len(message) <= 16:
-            self.msg_buffer[0] = message
-            self.lcd.message(self.msg_buffer[0])
+
+        if len(message) <= self.lcd_columns:
+            self.lcd_buffer[row] = message
+            self.write_message_buffer()
             time.sleep(10)
 
 
         else:
             for i in range(len(message)):
-                self.msg_buffer[0] = message[front:end]
-                print(self.msg_buffer)
-                self.lcd.message(self.msg_buffer[0])
+                self.lcd_buffer[row] = message[front:end]
+                self.write_message_buffer()
+                if front == 0:
+                    # Pause so I can read the first part
+                    time.sleep(self.pause_interval)
+
                 time.sleep(self.scroll_speed)
                 front += 1
                 end   += 1
                 self.lcd.clear()
 
-       
+      
+
 
     def update_pushes(self):
         self.set_message('updating...')
 
-        self.messages = []
+        # Delete previous messages
+        self.pushes = []
 
         # Cache the messages
         for push in self.api.pushes():
-            self.messages.append(push.body)
+
+            self.pushes.append(push)
 
 
         
@@ -64,34 +93,38 @@ class Pushbullet_LCD():
         self.lcd.clear()
         self.lcd.message(message)
 
+
+    def set_update_time(self):
+        self.update_time = datetime.datetime.now() + datetime.timedelta(0, self.update_interval)
+
+
+    def display_messages(self):
+        self.set_update_time()
+
+        while True:
+
+            if len(self.pushes) == 0:
+                self.set_message('No pushes')
+                time.sleep(self.update_interval)
+
+            for push in self.pushes:
+                if push.body == '':
+                    continue
+
+                self.lcd_buffer[1] = str(datetime.datetime.fromtimestamp(push.created))
+                self.scroll_buffer(push.body, row=0)
+
+                time.sleep(self.pause_interval)
+
+
+            now = datetime.datetime.now()
+
+            if now >= self.update_time:
+                self.update_pushes()
+                self.set_update_time()
+
 if __name__ == "__main__":
-    update_seconds = 120
     pb_lcd = Pushbullet_LCD()
     pb_lcd.update_pushes()
-
-    start_time = time.time()
-    
-    while True:
-        count = 0
-
-
-        if len(pb_lcd.messages) == 0:
-            pb_lcd.set_message('No pushes')
-            time.sleep(update_seconds)
-
-        for message in pb_lcd.messages:
-            if message == '':
-                continue
-
-            pb_lcd.scroll_message(message)
-            time.sleep(5)
-            count += 1
-
-
-        now = time.time()
-        if now - start_time >= update_seconds:
-            pb_lcd.update_pushes()
-            start_time = now
-
-        print('end loop') 
+    pb_lcd.display_messages()
 

@@ -1,0 +1,4 @@
+[settings]
+update_interval = 120
+pause_interval  = 1
+api_key         = YOUR_API_KEY

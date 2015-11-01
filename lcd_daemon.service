@@ -1,0 +1,13 @@
+[Unit]
+Description=Display notifications from Pushbullet on a LCD screen. 
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/etc/pushbullet_lcd
+ExecStart=/usr/bin/python2 /etc/pushbullet_lcd/lcd_daemon.py
+Restart=always
+
+
+[Install]
+WantedBy=multi-user.target
