@@ -1,4 +1,6 @@
 [settings]
 update_interval = 120
 pause_interval  = 1
-api_key         = YOUR_API_KEY
+api_key         = 
+log_path        = /etc/pushbullet_lcd/log
+device          = /dev/ttyACM0
