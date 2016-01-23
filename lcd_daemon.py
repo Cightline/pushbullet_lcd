@@ -7,7 +7,6 @@ import time
 import datetime
 import logging
 
-import daemon
 import pushybullet as pb
 import serial
 
@@ -126,7 +125,6 @@ class Pushbullet_LCD():
             return False
 
         logging.debug('%s pushes' % (len(self.pushes)))
-        self.initial_update = True
         
     def set_message(self, message):
         self.clear_lcd()
