@@ -1,3 +1,6 @@
+# pip2 install pyserial
+# https://learn.adafruit.com/usb-plus-serial-backpack/command-reference
+
 import ConfigParser
 import os
 import time
@@ -5,8 +8,7 @@ import datetime
 
 import daemon
 import pushybullet as pb
-import Adafruit_CharLCD as LCD
-
+import serial
 
 
 class Pushbullet_LCD():
@@ -14,13 +16,11 @@ class Pushbullet_LCD():
 
         self.lcd_columns = 16
         self.lcd_rows    = 2
-        self.lcd         = LCD.Adafruit_RGBCharLCD(27, 22, 25, 24, 23, 18, 
-                                               self.lcd_columns, self.lcd_rows, 4, 17, 7)
+        # If you aren't using the backpack, you will have to change this. 
 
+        self.ser = serial.Serial('/dev/ttyACM0')
 
-        
-
-        self.lcd.set_color(0.2, 0.5, 1.0) 
+        self.set_color(0.2, 0.5, 1.0) 
         self.lcd_buffer = [ ' '* self.lcd_columns  ] * self.lcd_rows
 
 
@@ -42,10 +42,28 @@ class Pushbullet_LCD():
         self.api_key         = self.config.get('settings', 'api_key')
         self.api             = pb.PushBullet(self.api_key)
 
+        # autoscroll off
+        self.ser.write(b'\xfe\x52')
+        # go home
+        self.ser.write(b'\xfe\x48')
+        # auto newline off
+        self.ser.write(b'\xfe\x44')
 
+    def clear_lcd(self):
+        self.ser.write(b'\xfe\x58')
+
+    def msg_lcd(self, message):
+        self.ser.write(bytes(message))
+
+    def set_color(self, r, g, b):
+        # FIX THIS
+        #self.ser.write(b'\xfe\x99')
+        self.ser.write(b'\xfe\xd0\x255\x255\x255')
+        
     def write_message_buffer(self):
-        self.lcd.clear()
-        self.lcd.message('\n'.join(self.lcd_buffer))
+        print(self.lcd_buffer)
+        self.clear_lcd()
+        self.msg_lcd('\n'.join(self.lcd_buffer))
 
    
     def scroll_buffer(self, message, row):
@@ -71,27 +89,26 @@ class Pushbullet_LCD():
                 time.sleep(self.scroll_speed)
                 front += 1
                 end   += 1
-                self.lcd.clear()
+                self.clear_lcd()
 
-      
 
 
     def update_pushes(self):
         self.set_message('updating...')
-
-        # Delete previous messages
         self.pushes = []
+        
+        try:
+            for push in self.api.pushes():
+                self.pushes.append(push)
 
-        # Cache the messages
-        for push in self.api.pushes():
-
-            self.pushes.append(push)
+        except Exception as e:
+            self.set_message(e)
 
 
         
     def set_message(self, message):
-        self.lcd.clear()
-        self.lcd.message(message)
+        self.clear_lcd()
+        self.msg_lcd(message)
 
 
     def set_update_time(self):
@@ -111,7 +128,7 @@ class Pushbullet_LCD():
                 if push.body == '':
                     continue
 
-                self.lcd_buffer[1] = str(datetime.datetime.fromtimestamp(push.created))
+                self.lcd_buffer[1] = str(datetime.datetime.fromtimestamp(push.created))[0:self.lcd_columns]
                 self.scroll_buffer(push.body, row=0)
 
                 time.sleep(self.pause_interval)
