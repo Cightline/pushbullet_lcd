@@ -1,6 +1,10 @@
 [settings]
 update_interval = 120
 pause_interval  = 1
-api_key         = 
-log_path        = /etc/pushbullet_lcd/log
+api_key         = dummy
+log_path        = log
 device          = /dev/ttyACM0
+contrast        = 180
+red             = 250
+green           = 255
+blue            = 140

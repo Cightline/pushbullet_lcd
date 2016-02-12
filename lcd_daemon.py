@@ -32,23 +32,46 @@ class Pushbullet_LCD():
         for path in self.config_paths:
             if os.path.exists(path):
                 self.config.read(path)
-
+        
         self.ser = serial.Serial(self.config.get('settings', 'device'))
-        logging.basicConfig(filename=self.config.get('settings', 'log_path'), level=logging.DEBUG)
-        self.update_interval = float(self.config.get('settings', 'update_interval'))
-        self.pause_interval  = float(self.config.get('settings', 'pause_interval'))
+
+        logging.basicConfig(filename=self.get_setting('log_path'), level=logging.DEBUG)
+        self.update_interval = float(self.get_setting('update_interval'))
+        self.pause_interval  = float(self.get_setting('pause_interval'))
         self.update_time     = None
-        self.api_key         = self.config.get('settings', 'api_key')
-        self.api             = pb.PushBullet(self.api_key)
+        self.api             = pb.PushBullet(self.get_setting('api_key'))
+
 
         # autoscroll off
-        self.ser.write(b'\xfe\x52')
+        self.write_cmd([0x52])
+        #self.ser.write(b'\xfe\x52')
+
         # go home
-        self.ser.write(b'\xfe\x48')
-        # auto newline off
-        self.ser.write(b'\xfe\x44')
+        self.write_cmd([0x48])
+        #self.ser.write(b'\xfe\x48')
         
-        self.set_color(0.2, 0.5, 1.0) 
+        # auto newline off
+        self.write_cmd([0x44])
+        #self.ser.write(b'\xfe\x44')
+
+        # set contrast
+        self.write_cmd([0x50, int(self.get_setting('contrast'))])
+        
+        self.set_color(int(self.get_setting('red')),
+                       int(self.get_setting('green')),
+                       int(self.get_setting('blue')))
+
+    def write_cmd(self, commands):
+        #https://github.com/adafruit/Adafruit-USB-Serial-RGB-Character-Backpack/blob/master/matrixtest.py
+        commands.insert(0, 0xFE)
+
+        for i in range(0, len(commands)):
+            self.ser.write(chr(commands[i]))
+            time.sleep(0.005)
+
+
+    def get_setting(self, setting):
+        return self.config.get('settings', setting)
 
 
     def clear_lcd(self):
@@ -56,13 +79,16 @@ class Pushbullet_LCD():
 
 
     def msg_lcd(self, message):
+        print(message)
         self.ser.write(bytes(message))
 
 
     def set_color(self, r, g, b):
-        # FIX THIS
-        #self.ser.write(b'\xfe\x99')
-        self.ser.write(b'\xfe\xd0\x255\x255\x255')
+
+        self.write_cmd([0xD0, r, g, b])
+
+        #self.ser.write(b'\xfe\xd0' + hex(r) + hex(g) + hex(b))
+        #self.ser.write(b'\xfe\xd0\x255\x255\x255')
 
 
     def write_message_buffer(self):
@@ -77,7 +103,8 @@ class Pushbullet_LCD():
 
         # If the message is short enough to display w/o scrolling
         if len(message) <= self.lcd_columns:
-            self.lcd_buffer[row] = message
+            diff = (self.lcd_columns - len(self.lcd_buffer[row])) + self.lcd_columns
+            self.lcd_buffer[row] = message.ljust(diff)
             self.write_message_buffer()
             time.sleep(10)
 
@@ -117,7 +144,7 @@ class Pushbullet_LCD():
                 print(push)
                 self.pushes.append(push)
 
-        except Exception as e:
+        except RuntimeError as e:
             logging.warning('exception: %s' % (e))
             self.set_message('%s' % (e))
             time.sleep(self.pause_interval)
