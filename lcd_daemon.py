@@ -35,7 +35,10 @@ class Pushbullet_LCD():
         
         self.ser = serial.Serial(self.config.get('settings', 'device'))
 
-        logging.basicConfig(filename=self.get_setting('log_path'), level=logging.DEBUG)
+        logging.basicConfig(format='%(asctime)s %(message)s', 
+                            datefmt='%m/%d/%Y %I:%M:%S',
+                            filename=self.get_setting('log_path'), 
+                            level=logging.DEBUG)
         self.update_interval = float(self.get_setting('update_interval'))
         self.pause_interval  = float(self.get_setting('pause_interval'))
         self.update_time     = None
@@ -138,11 +141,14 @@ class Pushbullet_LCD():
         logging.debug('updating pushes')
         self.set_message('updating...')
         self.pushes = []
+        self.did_update = False
         
         try:
             for push in self.api.pushes():
                 print(push)
                 self.pushes.append(push)
+
+            self.did_update = True
 
         except RuntimeError as e:
             logging.warning('exception: %s' % (e))
@@ -152,6 +158,7 @@ class Pushbullet_LCD():
             return False
 
         logging.debug('%s pushes' % (len(self.pushes)))
+
         
     def set_message(self, message):
         self.clear_lcd()
@@ -171,21 +178,23 @@ class Pushbullet_LCD():
                 self.set_message('No pushes')
                 time.sleep(self.update_interval)
 
+            
+            elif len(self.pushes) and self.did_update == True:
+                for push in self.pushes:
+                    if push.body == '' or push.type != 'note':
+                        continue
 
-            for push in self.pushes:
-                if push.body == '':
-                    continue
+                    self.lcd_buffer[1] = str(datetime.datetime.fromtimestamp(push.created))[0:self.lcd_columns]
+                    self.scroll_buffer(push.body, row=0)
 
-                self.lcd_buffer[1] = str(datetime.datetime.fromtimestamp(push.created))[0:self.lcd_columns]
-                self.scroll_buffer(push.body, row=0)
-
-                time.sleep(self.pause_interval)
+                    time.sleep(self.pause_interval)
 
 
-            now = datetime.datetime.now()
-
-            if now >= self.update_time and self.update_pushes() == False:
+            if datetime.datetime.now() >= self.update_time:
                 self.set_update_time()
+                self.update_pushes()
+
+
 
 if __name__ == "__main__":
     pb_lcd = Pushbullet_LCD()
