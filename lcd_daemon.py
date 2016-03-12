@@ -23,7 +23,7 @@ class Pushbullet_LCD():
         self.scroll_speed = .5
 
         self.pushes = []
-        self.did_update = False
+        self.last_update = False
 
 
         self.config = ConfigParser.ConfigParser()
@@ -93,10 +93,16 @@ class Pushbullet_LCD():
         #self.ser.write(b'\xfe\xd0' + hex(r) + hex(g) + hex(b))
         #self.ser.write(b'\xfe\xd0\x255\x255\x255')
 
+    def fill(self, message, limit):
+        diff = (limit - len(message)) + len(message)
 
-    def write_message_buffer(self):
+        return message.ljust(diff)
+
+
+    def write_message_buffer(self, fill=False):
         print(self.lcd_buffer)
         self.clear_lcd()
+
         self.msg_lcd('\n'.join(self.lcd_buffer))
 
    
@@ -141,14 +147,14 @@ class Pushbullet_LCD():
         logging.debug('updating pushes')
         self.set_message('updating...')
         self.pushes = []
-        self.did_update = False
+        self.last_update = False
         
         try:
             for push in self.api.pushes():
                 print(push)
                 self.pushes.append(push)
 
-            self.did_update = True
+            self.last_update = datetime.datetime.now()
 
         except RuntimeError as e:
             logging.warning('exception: %s' % (e))
@@ -174,12 +180,14 @@ class Pushbullet_LCD():
 
         while True:
 
-            if len(self.pushes) == 0 and self.did_update == True:
-                self.set_message('No pushes')
+            if len(self.pushes) == 0 and self.last_update != False:
+                self.lcd_buffer[0] = self.fill("No pushes", self.lcd_columns)
+                self.lcd_buffer[1] = self.last_update.strftime('%H:%M:%S')
+                self.write_message_buffer()
                 time.sleep(self.update_interval)
 
             
-            elif len(self.pushes) and self.did_update == True:
+            elif len(self.pushes) and self.last_update != False:
                 for push in self.pushes:
                     if push.body == '' or push.type != 'note':
                         continue
